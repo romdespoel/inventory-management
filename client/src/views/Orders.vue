@@ -27,6 +27,58 @@
         </div>
       </div>
 
+      <!-- Submitted (restock) orders — filter-independent -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Submitted Orders ({{ restockOrders.length }})</h3>
+        </div>
+        <div class="table-container">
+          <table class="restock-table">
+            <thead>
+              <tr>
+                <th class="rcol-order-number">Order #</th>
+                <th class="rcol-items">Items</th>
+                <th class="rcol-date">Submitted</th>
+                <th class="rcol-date">Expected Delivery</th>
+                <th class="rcol-lead">Lead Time</th>
+                <th class="rcol-value">Total Value</th>
+                <th class="rcol-status">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="restockOrders.length === 0">
+                <td colspan="7" class="empty-state">No restocking orders submitted yet.</td>
+              </tr>
+              <tr v-else v-for="order in restockOrders" :key="order.id">
+                <td class="rcol-order-number"><strong>{{ order.order_number }}</strong></td>
+                <td class="rcol-items">
+                  <details class="items-details">
+                    <summary class="items-summary">
+                      {{ order.items.length }} item{{ order.items.length !== 1 ? 's' : '' }}
+                    </summary>
+                    <div class="items-dropdown">
+                      <div v-for="item in order.items" :key="item.sku" class="item-entry">
+                        <span class="item-name">{{ item.name }}</span>
+                        <span class="item-meta">Qty: {{ item.quantity }} @ {{ currencySymbol }}{{ item.unit_cost }}</span>
+                      </div>
+                    </div>
+                  </details>
+                </td>
+                <td class="rcol-date">{{ formatDate(order.submitted_date) }}</td>
+                <td class="rcol-date">{{ formatDate(order.expected_delivery) }}</td>
+                <td class="rcol-lead">{{ order.lead_time_days }} days</td>
+                <td class="rcol-value"><strong>{{ currencySymbol }}{{ order.total_value.toLocaleString() }}</strong></td>
+                <td class="rcol-status">
+                  <span :class="['badge', getOrderStatusClass(order.status)]">
+                    {{ order.status }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="card">
         <div class="card-header">
           <h3 class="card-title">{{ t('orders.allOrders') }} ({{ orders.length }})</h3>
@@ -95,6 +147,7 @@ export default {
     const loading = ref(true)
     const error = ref(null)
     const orders = ref([])
+    const restockOrders = ref([])
 
     // Use shared filters
     const {
@@ -121,6 +174,21 @@ export default {
         error.value = 'Failed to load orders: ' + err.message
       } finally {
         loading.value = false
+      }
+    }
+
+    // Restock orders are filter-independent — always show all submitted orders
+    const loadRestockOrders = async () => {
+      try {
+        const fetched = await api.getRestockOrders()
+        // Sort newest first by submitted_date
+        restockOrders.value = fetched.sort((a, b) => {
+          const dateA = new Date(a.submitted_date)
+          const dateB = new Date(b.submitted_date)
+          return dateB - dateA
+        })
+      } catch (err) {
+        console.error('Failed to load restock orders:', err)
       }
     }
 
@@ -153,13 +221,17 @@ export default {
       })
     }
 
-    onMounted(loadOrders)
+    onMounted(() => {
+      loadOrders()
+      loadRestockOrders()
+    })
 
     return {
       t,
       loading,
       error,
       orders,
+      restockOrders,
       getOrdersByStatus,
       getOrderStatusClass,
       formatDate,
@@ -275,5 +347,42 @@ export default {
 .item-meta {
   font-size: 0.813rem;
   color: #64748b;
+}
+
+/* Restock / submitted orders table */
+.restock-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.rcol-order-number {
+  width: 150px;
+}
+
+.rcol-items {
+  width: 160px;
+}
+
+.rcol-date {
+  width: 145px;
+}
+
+.rcol-lead {
+  width: 110px;
+}
+
+.rcol-value {
+  width: 125px;
+}
+
+.rcol-status {
+  width: 115px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 2rem;
+  color: #64748b;
+  font-style: italic;
 }
 </style>
